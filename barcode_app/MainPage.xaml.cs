@@ -3,20 +3,25 @@ using System.Text.Json;
 using System.Web;
 using CommunityToolkit.Maui.Alerts;
 using CommunityToolkit.Maui.Core;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace barcode_app{
 
-	public class InventoryItem
+	public class Asset
 	{
-		public int Id { get; set; }
-		public string Name { get; set; }
-		public string Description { get; set; }
-		public string Artist { get; set; }
-		public string Dimension { get; set; }
-		public string Category { get; set; }
-		public string Image { get; set; }  // URL to the image
-		public DateTime PurchaseDate { get; set; }
+		public int id { get; set; }
+		public string name { get; set; }
+		public string description { get; set; }
+		public string artist { get; set; }
+		public string dimension { get; set; }
+		public string image { get; set; }
+		public string purchase_date { get; set; }
+		public int category { get; set; }
+		public int user { get; set; }
 	}
+
 	public partial class MainPage : ContentPage, IQueryAttributable
 	{	
 		HttpClient client = new HttpClient();
@@ -33,7 +38,7 @@ namespace barcode_app{
 			// try to get something from internet
 			try
 			{
-				var resp = client.GetAsync("https://10.68.94.233/api/<name>.json").Result;
+				var resp = client.GetAsync("http://10.0.2.2:8000/api.json").Result;
 				Debug.WriteLine("Network test ok. " + resp.Content.ReadAsStringAsync().Result);
 				LabelHttpResponse.Text = "Network ready";
 			}
@@ -44,8 +49,6 @@ namespace barcode_app{
 			LabelHttpResponse.Text = "Network may not ready";
 			}
 		}
-		
-		
 
 		public MainPage()
 		{
@@ -53,6 +56,79 @@ namespace barcode_app{
 			Routing.RegisterRoute("barcodescanner", typeof(BarcodeScanner));
 			Network_test();
 		}
+
+
+
+        private async void FindBtn_Clicked(object sender, EventArgs e)
+        {
+            if (BarcodeEntry.Text.Trim().Length == 0)
+            {
+                await Show_Toast("Please enter a barcode number");
+                return;
+            }
+
+            ResetProductDetail();
+
+            try
+            {
+                await Show_Toast("Querying product information");
+
+                // Correct URL with trimmed barcode
+                string ApiUrl = $"http://10.0.2.2:8000/api/{BarcodeEntry.Text.Trim()}/"; 
+
+                var resp = await client.GetStringAsync(ApiUrl);
+
+                // Check if response contains valid product data (for error handling)
+                if (string.IsNullOrEmpty(resp) || resp.Contains("\"status\":0"))
+                {
+                    LabelMessage.Text = "Product not found in database";
+                    LabelMessage.TextColor = Colors.Red;
+                    ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
+                    return;
+                }
+
+                // Deserialize JSON response into an Asset object
+                Asset asset = JsonSerializer.Deserialize<Asset>(resp);
+
+                // Access and display fields from the Asset object
+                if (asset != null)
+                {
+                    LabelName.Text = $"Name: {asset.name}";
+                    LabelArtist.Text = $"Artist: {asset.artist}";
+                    LabelDescription.Text = $"Description: {asset.description}";
+                    LabelCategories.Text = $"Category: {asset.category}"; // You may want to fetch category name if needed
+                    LabelDimensions.Text = $"Dimensions: {asset.dimension}";
+
+                    // Handle image (assuming 'image' is a URL)
+                    if (!string.IsNullOrEmpty(asset.image))
+                    {
+                        ImageCover.Source = ImageSource.FromUri(new Uri(asset.image));
+                    }
+                    else
+                    {
+                        ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
+                    }
+
+                    LabelMessage.Text = "Item loaded successfully";
+                    LabelMessage.TextColor = Colors.Green;
+                }
+                else
+                {
+                    LabelMessage.Text = "Error: No asset data found.";
+                    LabelMessage.TextColor = Colors.Red;
+                    ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
+                }
+            }
+            catch (Exception ex)
+            {
+                LabelHttpResponse.Text = "Querying product information error. " + ex.Message;
+                LabelMessage.Text = "Error fetching product data";
+                LabelMessage.TextColor = Colors.Red;
+                Debug.WriteLine(LabelHttpResponse.Text);
+            }
+        }
+
+
 
 		private async Task Show_Toast(string message)
 		{
@@ -67,9 +143,9 @@ namespace barcode_app{
 		private void ResetProductDetail()
 		{
 			// Reset the item detail labels to default values
-			LabelProduct.Text = "Product: ";
-			LabelBrand.Text = "Brand: ";
-			LabelIngredients.Text = "Ingredients: ";
+			LabelName.Text = "Name: ";
+			LabelArtist.Text = "Artist: ";
+			LabelDescription.Text = "Description: ";
 			LabelCategories.Text = "Category: ";
 			LabelMessage.Text = string.Empty;
 			LabelMessage.TextColor = Colors.Black;
@@ -86,10 +162,11 @@ namespace barcode_app{
 					var rootElement = jsonDocument.RootElement;
 
 					// Map fields to UI labels
-					LabelProduct.Text = $"Name: {rootElement.GetProperty("name").GetString()}";
-					LabelBrand.Text = $"Artist: {rootElement.GetProperty("artist").GetString()}";
-					LabelIngredients.Text = $"Description: {rootElement.GetProperty("description").GetString()}";
+					LabelName.Text = $"Name: {rootElement.GetProperty("name").GetString()}";
+					LabelArtist.Text = $"Artist: {rootElement.GetProperty("artist").GetString()}";
+					LabelDescription.Text = $"Description: {rootElement.GetProperty("description").GetString()}";
 					LabelCategories.Text = $"Category: {rootElement.GetProperty("category").GetString()}";
+					LabelDimensions.Text = $"Dimensions: {rootElement.GetProperty("dimension").GetString()}";
 
 					// Handle image (assuming 'image' is a URL)
 					if (rootElement.TryGetProperty("image", out var imageUrl))
@@ -112,129 +189,16 @@ namespace barcode_app{
 			}
 		}
 
-		private void ParseFoodProductJSON(string json)
-		{
-			try
-			{
-				// Reset labels
-				LabelProduct.Text = "Product: ";
-				LabelBrand.Text = "Brand: ";
-				LabelIngredients.Text = "Ingredients: ";
-				LabelCategories.Text = "Category: ";
-				
-				// Convert http response content to JSON object
-				using (var jsonDocument = JsonDocument.Parse(json))
-				{
-					var rootElement = jsonDocument.RootElement;
-					
-					// Check if product exists
-					if (rootElement.TryGetProperty("status", out var status) && status.GetInt32() == 0)
-					{
-						LabelMessage.Text = "Product not found in database";
-						LabelMessage.TextColor = Colors.Red;
-						ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
-						return;
-					}
 
-					if (rootElement.TryGetProperty("product", out var product))
-					{
-						// Get product name
-						if (product.TryGetProperty("product_name", out var productName))
-						{
-							LabelProduct.Text += productName.ToString();
-						}
-
-						// Get brand
-						if (product.TryGetProperty("brands", out var brands))
-						{
-							LabelBrand.Text += brands.ToString();
-						}
-
-						// Get ingredients
-						if (product.TryGetProperty("ingredients_text", out var ingredients))
-						{
-							LabelIngredients.Text += ingredients.ToString();
-						}
-
-						// Get categories
-						if (product.TryGetProperty("categories", out var categories))
-						{
-							LabelCategories.Text += categories.ToString();
-						}
-
-						// Get product image
-						if (product.TryGetProperty("image_url", out var imageUrl))
-						{
-							ImageCover.Source = ImageSource.FromUri(new Uri(imageUrl.ToString()));
-						}
-						else
-						{
-							ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
-						}
-
-						LabelMessage.Text = "Product information loaded";
-						LabelMessage.TextColor = Colors.Green;
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				LabelMessage.Text = $"Error: {ex.Message}";
-				LabelMessage.TextColor = Colors.Red;
-				ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
-			}
-		}
 
 		private async void ScanBarcodeBtn_Clicked(object sender, EventArgs e)
 		{
 			await Shell.Current.GoToAsync("barcodescanner");
 		}
-		private async void FindBtn_Clicked(object sender, EventArgs e)
-		{
-			if (BarcodeEntry.Text.Trim().Length == 0)
-			{
-				// No barcode number is entered
-				await Show_Toast("Please enter a barcode number");
-				return;
-			}
 
-			ResetProductDetail();
-			
-			try
-			{
-				await Show_Toast("Querying product information");
-				
-				// API endpoint format: https://world.openfoodfacts.org/api/v0/product/<name>.json
-				string ApiUrl = $"https://10.68.94.233/api/{BarcodeEntry.Text.Trim()}.json";
-				
-				var resp = await client.GetStringAsync(ApiUrl);
-				LabelHttpResponse.Text = resp;
-				
-				// Check if response contains valid product data
-				if (resp.Contains("\"status\":0") || resp.Length < 50)
-				{
-					// Product not found
-					LabelMessage.Text = "Product not found in database";
-					LabelMessage.TextColor = Colors.Red;
-					ImageCover.Source = ImageSource.FromFile("image_coming_soon.png");
-					return;
-				}
-				
-				ParseInventoryItemJSON(resp);
-			}
-			catch (Exception ex)
-			{
-				LabelHttpResponse.Text = "Querying product information error. " + ex.Message;
-				LabelMessage.Text = "Error fetching product data";
-				LabelMessage.TextColor = Colors.Red;
-				Debug.WriteLine(LabelHttpResponse.Text);
-			}
-		}
-
+		
 
 	}
-
-	
 }
 
 

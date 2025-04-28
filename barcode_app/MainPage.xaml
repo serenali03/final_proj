@@ -14,7 +14,7 @@
                     HorizontalOptions="Start" />
             
                 <Label
-                        Text="Find your food's information"
+                        Text="Find your artwork's information"
                         FontSize="36"
                         FontAttributes="Bold"
                         TextColor="#2D2D2D" />
@@ -25,7 +25,7 @@
             <VerticalStackLayout Spacing="20">
                 
                 <Label
-                    Text="Barcode"
+                    Text="Name or ID"
                     FontSize="24"
                     FontAttributes="Bold"
                     TextColor="#2D2D2D" />
@@ -80,13 +80,18 @@
                 <Border BackgroundColor="#FFFFFF" StrokeShape="RoundRectangle 8" Padding="16">
                     <VerticalStackLayout Spacing="12">
 
-                        <Label x:Name="LabelProduct"
+                        <Label x:Name="LabelName"
                             FontSize="18"
                             FontAttributes="Bold"
                             TextColor="#2f089e"
                             Text="Product:" />
 
-                        <Label x:Name="LabelBrand"
+                        <Label x:Name="LabelArtist"
+                            FontSize="16"
+                            TextColor="#444"
+                            Text="Brand:" />
+
+                        <Label x:Name="LabelDescription"
                             FontSize="16"
                             TextColor="#444"
                             Text="Brand:" />
@@ -97,7 +102,7 @@
                             Source="image_coming_soon.png"
                             HorizontalOptions="Center" />
 
-                        <Label x:Name="LabelIngredients"
+                        <Label x:Name="LabelDimensions"
                             FontSize="14"
                             TextColor="#666"
                             Text="Ingredients:" />
